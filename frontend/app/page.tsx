@@ -146,12 +146,11 @@ export default function Home() {
     }
   }
 
-  // Re-fetch chart data whenever timeframe changes (and ticker is not empty)
+  // Re-fetch chart data whenever timeframe changes
   useEffect(() => {
     if (ticker) {
       fetchChartData(timeframe);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeframe]);
 
   // Toggling advanced
@@ -170,80 +169,77 @@ export default function Home() {
     }
   }
 
-  // Timeframe options
   const timeframeOptions = ["1D", "1W", "1M", "6M", "1Y", "10Y"];
 
   return (
     <div className="min-h-screen bg-background text-foreground">
       <main className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold mb-6">Stock Information</h1>
-
-        {/* Symbol Input & Toggles at the top */}
-        <div className="flex flex-col md:flex-row gap-4 items-start md:items-end mb-6">
-          <div className="w-full md:w-1/2">
-            <label
-              htmlFor="symbol"
-              className="text-sm text-muted-foreground mb-2 block"
+        {/* Input + Toggles at the top */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold mb-6">Stock Information</h1>
+          <div className="flex flex-col md:flex-row gap-4 items-start md:items-end mb-6">
+            <div className="w-full md:w-1/2">
+              <label
+                htmlFor="symbol"
+                className="text-sm text-muted-foreground mb-2 block"
+              >
+                Enter a symbol/ticker (e.g. AAPL)
+              </label>
+              <div className="relative">
+                <Search
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  size={18}
+                />
+                <Input
+                  id="symbol"
+                  type="text"
+                  value={ticker}
+                  onChange={(e) => setTicker(e.target.value.toUpperCase())}
+                  className="pl-10 bg-gray-900/70 border-gray-800/50 focus:border-gray-600"
+                  placeholder="AAPL"
+                />
+              </div>
+            </div>
+            <Button
+              onClick={handleFetch}
+              className="bg-gray-800 hover:bg-gray-700 text-white"
+              disabled={loading || !ticker}
             >
-              Enter a symbol/ticker (e.g. AAPL)
-            </label>
-            <div className="relative">
-              <Search
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                size={18}
+              {loading ? "Loading..." : "Fetch"}
+            </Button>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-6">
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="advanced-mode"
+                checked={advancedMode}
+                onCheckedChange={handleAdvancedToggle}
               />
-              <Input
-                id="symbol"
-                type="text"
-                value={ticker}
-                onChange={(e) => setTicker(e.target.value.toUpperCase())}
-                className="pl-10 bg-gray-900/70 border-gray-800/50 focus:border-gray-600"
-                placeholder="AAPL"
+              <label htmlFor="advanced-mode" className="text-gray-300 text-sm">
+                Advanced Mode
+              </label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="dividend-mode"
+                checked={dividendMode}
+                onCheckedChange={handleDividendToggle}
               />
+              <label htmlFor="dividend-mode" className="text-gray-300 text-sm">
+                Dividend Mode
+              </label>
             </div>
           </div>
-
-          <Button
-            onClick={handleFetch}
-            className="bg-gray-800 hover:bg-gray-700 text-white"
-            disabled={loading || !ticker}
-          >
-            {loading ? "Loading..." : "Fetch"}
-          </Button>
         </div>
 
-        {/* Toggles */}
-        <div className="flex flex-col sm:flex-row gap-6 mb-4">
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="advanced-mode"
-              checked={advancedMode}
-              onCheckedChange={handleAdvancedToggle}
-            />
-            <label htmlFor="advanced-mode" className="text-gray-300 text-sm">
-              Advanced Mode
-            </label>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="dividend-mode"
-              checked={dividendMode}
-              onCheckedChange={handleDividendToggle}
-            />
-            <label htmlFor="dividend-mode" className="text-gray-300 text-sm">
-              Dividend Mode
-            </label>
-          </div>
-        </div>
-
-        {error && <p className="text-red-500 mt-2">{error}</p>}
+        {error && <p className="text-red-500 mt-4">{error}</p>}
         {loading && <LoadingSpinner />}
 
-        {/* If data is fetched, show the Price + Cards + Chart */}
+        {/* Display fetched stock info below the input */}
         {stockData && (
           <>
-            {/* Price Box */}
+            {/* Price Section */}
             <div className="flex items-center justify-between bg-gray-900/50 border border-gray-800/50 rounded-lg p-4 mb-6">
               <div>
                 <p className="text-sm text-gray-400">
@@ -276,9 +272,9 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Three Columns */}
+            {/* 3 Columns: Basic / Advanced / Dividend */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Basic Info */}
+              {/* Basic Info Card */}
               <Card className="bg-gray-900/50 border-gray-800/50">
                 <CardHeader className="border-b border-gray-800/50 pb-3">
                   <CardTitle className="flex items-center text-xl">
@@ -346,7 +342,7 @@ export default function Home() {
                 </CardContent>
               </Card>
 
-              {/* Advanced Info */}
+              {/* Advanced Info Card */}
               {advancedMode && (
                 <Card className="bg-gray-900/50 border-gray-800/50">
                   <CardHeader className="border-b border-gray-800/50 pb-3">
@@ -432,7 +428,7 @@ export default function Home() {
                 </Card>
               )}
 
-              {/* Dividend Info */}
+              {/* Dividend Info Card */}
               {dividendMode && (
                 <Card className="bg-gray-900/50 border-gray-800/50">
                   <CardHeader className="border-b border-gray-800/50 pb-3">
@@ -487,9 +483,8 @@ export default function Home() {
             <div className="bg-gray-900/50 border border-gray-800/50 rounded-lg p-4 mt-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xl font-semibold">
-                  Price History: {ticker.toUpperCase()}
+                  Price History: {stockData.ticker.toUpperCase()}
                 </h3>
-                {/* Timeframe Buttons */}
                 <div className="flex space-x-2">
                   {timeframeOptions.map((tf) => (
                     <Button
@@ -506,39 +501,40 @@ export default function Home() {
                 <p className="text-gray-400">Loading chart...</p>
               )}
               {!chartLoading && chartData && (
-                <Line
-                  data={{
-                    labels: chartData.timestamps.map((ts) => {
-                      const d = new Date(ts * 1000);
-                      return d.toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "2-digit",
-                      });
-                    }),
-                    datasets: [
-                      {
-                        label: "Price",
-                        data: chartData.closePrices,
-                        borderColor: "#38bdf8",
-                        backgroundColor: "rgba(56,189,248,0.1)",
-                        tension: 0.3,
+                <div className="h-72">
+                  <Line
+                    data={{
+                      labels: chartData.timestamps.map((ts) => {
+                        const d = new Date(ts * 1000);
+                        return d.toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "2-digit",
+                        });
+                      }),
+                      datasets: [
+                        {
+                          label: "Price",
+                          data: chartData.closePrices,
+                          borderColor: "#38bdf8",
+                          backgroundColor: "rgba(56,189,248,0.1)",
+                          tension: 0.3,
+                        },
+                      ],
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      scales: {
+                        x: { display: true },
+                        y: { display: true, beginAtZero: false },
                       },
-                    ],
-                  }}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                      x: { display: true },
-                      y: { display: true, beginAtZero: false },
-                    },
-                    plugins: {
-                      legend: { display: false },
-                    },
-                  }}
-                  height={300}
-                />
+                      plugins: {
+                        legend: { display: false },
+                      },
+                    }}
+                  />
+                </div>
               )}
             </div>
           </>

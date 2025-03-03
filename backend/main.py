@@ -16,6 +16,7 @@ def add_cors_headers(response):
     response.headers.add("Access-Control-Allow-Methods", "GET,OPTIONS")
     return response
 
+# Environment variables
 POLYGON_API_KEY = os.getenv("POLYGON_API_KEY")
 FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
 
@@ -23,7 +24,7 @@ FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
 def hello():
     return "Backend Debugging Successful"
 
-@app.route("/api/stock/<ticker>", methods=["GET", "OPTIONS"])
+@app.route("/api/stock/<string:ticker>", methods=["GET", "OPTIONS"])
 def get_stock_data(ticker):
     if request.method == "OPTIONS":
         return jsonify({}), 200
@@ -36,7 +37,7 @@ def get_stock_data(ticker):
     polygon_resp = requests.get(polygon_url)
     try:
         polygon_data = polygon_resp.json()
-    except:
+    except Exception as e:
         return jsonify({"error": "Unable to parse JSON from Polygon (tickers)."}), 500
 
     if "results" not in polygon_data:
@@ -44,7 +45,7 @@ def get_stock_data(ticker):
 
     results = polygon_data["results"]
 
-    # Basic
+    # Basic data
     company_name = results.get("name", "")
     market_cap   = results.get("market_cap", 0)
     ticker_market = results.get("market")
@@ -54,7 +55,7 @@ def get_stock_data(ticker):
     country = results.get("locale")
     phone_number_basic = results.get("phone_number")
 
-    # Advanced
+    # Advanced fields
     cik = None
     address = None
     post_code = None
@@ -82,7 +83,7 @@ def get_stock_data(ticker):
         type_ = results.get("type")
         round_lot = results.get("round_lot")
 
-    # Dividend
+    # Dividend fields
     dividend_cash_amount = None
     dividend_declaration_date = None
     dividend_type = None
@@ -95,7 +96,7 @@ def get_stock_data(ticker):
         dividend_resp = requests.get(polygon_dividend_url)
         try:
             dividend_data = dividend_resp.json()
-        except:
+        except Exception as e:
             return jsonify({"error": "Unable to parse JSON from Polygon (dividends)."}), 500
 
         if "results" in dividend_data and isinstance(dividend_data["results"], list):
@@ -109,7 +110,7 @@ def get_stock_data(ticker):
                 pay_date = first_dividend.get("pay_date")
 
     # 2) Fetch real-time price from Finnhub
-    finnhub_url = f"https://finnhub.io/api/v1/quote?symbol={ticker}&token={FINNHUB_API_KEY}"
+    finnhub_url = f"https://finnhub.io/api/v1/quote?symbol={ticker.upper()}&token={FINNHUB_API_KEY}"
     finnhub_resp = requests.get(finnhub_url)
     price_data = finnhub_resp.json()
     current_price = price_data.get("c")
@@ -150,23 +151,21 @@ def get_stock_data(ticker):
         "frequency": frequency,
         "payDate": pay_date,
 
-        # Real-time
+        # Real-time price
         "realTimePrice": current_price,
         "priceChange": price_change,
         "percentChange": percent_change,
     })
 
-@app.route("/api/stock/<ticker>/history", methods=["GET"])
+@app.route("/api/stock/<string:ticker>/history", methods=["GET"])
 def get_stock_history(ticker):
     """
-    Return historical price data from Finnhub:
+    Return historical price data for the given ticker over a timeframe:
     ?timeframe=1D|1W|1M|6M|1Y|10Y
-    We'll adapt resolution to avoid 404 for 1D/1W.
     """
     timeframe = request.args.get("timeframe", "1M")
     now = int(time.time())
 
-    # Decide how far back in seconds
     seconds_map = {
         "1D": 86400,
         "1W": 604800,
@@ -178,25 +177,16 @@ def get_stock_history(ticker):
     secs = seconds_map.get(timeframe, 2592000)
     from_epoch = now - secs
 
-    # Adjust resolution based on timeframe
-    # 1D => 1-min bars, 1W => 15-min, 1M => D, 6M => D, 1Y => W, 10Y => M
-    resolution_map = {
-        "1D": "1",
-        "1W": "15",
-        "1M": "D",
-        "6M": "D",
-        "1Y": "W",
-        "10Y": "M",
-    }
-    resolution = resolution_map.get(timeframe, "D")
+    # For 1D, use 5-minute resolution; otherwise daily
+    resolution = "5" if timeframe == "1D" else "D"
 
     candle_url = "https://finnhub.io/api/v1/stock/candle"
     params = {
-        "symbol": ticker,
+        "symbol": ticker.upper(),
         "resolution": resolution,
         "from": from_epoch,
         "to": now,
-        "token": FINNHUB_API_KEY,
+        "token": FINNHUB_API_KEY
     }
     resp = requests.get(candle_url, params=params)
     data = resp.json()
