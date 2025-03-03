@@ -87,7 +87,7 @@ export default function Home() {
   } | null>(null);
   const timeframeOptions = ["1D", "1W", "1M", "6M", "1Y", "10Y"];
 
-  // Fetch main stock data
+  // Fetch main stock data and then automatically fetch 1M chart data
   async function handleFetch() {
     setError("");
     setStockData(null);
@@ -112,6 +112,8 @@ export default function Home() {
       }
       const data = await res.json();
       setStockData(data);
+      // Automatically load 1M chart data after main data is fetched
+      await fetchChartData("1M");
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -168,6 +170,29 @@ export default function Home() {
       handleFetch();
     }
   }
+
+  // Prepare chart.js data
+  const chartJsData = chartData
+    ? {
+        labels: chartData.timestamps.map((ts) => {
+          const d = new Date(ts * 1000);
+          return d.toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "2-digit",
+          });
+        }),
+        datasets: [
+          {
+            label: "Price",
+            data: chartData.closePrices,
+            borderColor: "#38bdf8",
+            backgroundColor: "rgba(56,189,248,0.1)",
+            tension: 0.3,
+          },
+        ],
+      }
+    : null;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -235,7 +260,7 @@ export default function Home() {
         {error && <p className="text-red-500 mt-4">{error}</p>}
         {loading && <LoadingSpinner />}
 
-        {/* Stock Data Section (below input & toggles) */}
+        {/* Stock Data Section (Below Input) */}
         {stockData && (
           <>
             {/* Price Section */}
@@ -500,39 +525,40 @@ export default function Home() {
                 <p className="text-gray-400">Loading chart...</p>
               )}
               {!chartLoading && chartData && (
-                <Line
-                  data={{
-                    labels: chartData.timestamps.map((ts) => {
-                      const d = new Date(ts * 1000);
-                      return d.toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "2-digit",
-                      });
-                    }),
-                    datasets: [
-                      {
-                        label: "Price",
-                        data: chartData.closePrices,
-                        borderColor: "#38bdf8",
-                        backgroundColor: "rgba(56,189,248,0.1)",
-                        tension: 0.3,
+                <div className="h-80">
+                  <Line
+                    data={{
+                      labels: chartData.timestamps.map((ts) => {
+                        const d = new Date(ts * 1000);
+                        return d.toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "2-digit",
+                        });
+                      }),
+                      datasets: [
+                        {
+                          label: "Price",
+                          data: chartData.closePrices,
+                          borderColor: "#38bdf8",
+                          backgroundColor: "rgba(56,189,248,0.1)",
+                          tension: 0.3,
+                        },
+                      ],
+                    }}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      scales: {
+                        x: { display: true },
+                        y: { display: true, beginAtZero: false },
                       },
-                    ],
-                  }}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                      x: { display: true },
-                      y: { display: true, beginAtZero: false },
-                    },
-                    plugins: {
-                      legend: { display: false },
-                    },
-                  }}
-                  height={300}
-                />
+                      plugins: {
+                        legend: { display: false },
+                      },
+                    }}
+                  />
+                </div>
               )}
             </div>
           </>
