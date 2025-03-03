@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import LoadingSpinner from "@/components/LoadingSpinner";
-
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -86,8 +85,9 @@ export default function Home() {
     timestamps: number[];
     closePrices: number[];
   } | null>(null);
+  const timeframeOptions = ["1D", "1W", "1M", "6M", "1Y", "10Y"];
 
-  // 1) Fetch main stock data
+  // Fetch main stock data
   async function handleFetch() {
     setError("");
     setStockData(null);
@@ -119,7 +119,7 @@ export default function Home() {
     }
   }
 
-  // 2) Fetch chart data
+  // Fetch chart data
   async function fetchChartData(tf: string) {
     if (!ticker) return;
     setChartLoading(true);
@@ -146,14 +146,15 @@ export default function Home() {
     }
   }
 
-  // Re-fetch chart data whenever timeframe changes
+  // Re-fetch chart data when timeframe changes
   useEffect(() => {
     if (ticker) {
       fetchChartData(timeframe);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeframe]);
 
-  // Toggling advanced
+  // Toggle handlers
   function handleAdvancedToggle(val: boolean) {
     setAdvancedMode(val);
     if (ticker.trim() !== "") {
@@ -161,7 +162,6 @@ export default function Home() {
     }
   }
 
-  // Toggling dividend
   function handleDividendToggle(val: boolean) {
     setDividendMode(val);
     if (ticker.trim() !== "") {
@@ -169,12 +169,10 @@ export default function Home() {
     }
   }
 
-  const timeframeOptions = ["1D", "1W", "1M", "6M", "1Y", "10Y"];
-
   return (
     <div className="min-h-screen bg-background text-foreground">
       <main className="container mx-auto px-4 py-8">
-        {/* Input + Toggles at the top */}
+        {/* Input & Toggles at the Top */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-6">Stock Information</h1>
           <div className="flex flex-col md:flex-row gap-4 items-start md:items-end mb-6">
@@ -200,6 +198,7 @@ export default function Home() {
                 />
               </div>
             </div>
+
             <Button
               onClick={handleFetch}
               className="bg-gray-800 hover:bg-gray-700 text-white"
@@ -236,7 +235,7 @@ export default function Home() {
         {error && <p className="text-red-500 mt-4">{error}</p>}
         {loading && <LoadingSpinner />}
 
-        {/* Display fetched stock info below the input */}
+        {/* Stock Data Section (below input & toggles) */}
         {stockData && (
           <>
             {/* Price Section */}
@@ -272,7 +271,7 @@ export default function Home() {
               </div>
             </div>
 
-            {/* 3 Columns: Basic / Advanced / Dividend */}
+            {/* Cards Section */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Basic Info Card */}
               <Card className="bg-gray-900/50 border-gray-800/50">
@@ -479,7 +478,7 @@ export default function Home() {
               )}
             </div>
 
-            {/* Price History Card (line chart) */}
+            {/* Price History Card (Line Chart) */}
             <div className="bg-gray-900/50 border border-gray-800/50 rounded-lg p-4 mt-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xl font-semibold">
@@ -501,40 +500,39 @@ export default function Home() {
                 <p className="text-gray-400">Loading chart...</p>
               )}
               {!chartLoading && chartData && (
-                <div className="h-72">
-                  <Line
-                    data={{
-                      labels: chartData.timestamps.map((ts) => {
-                        const d = new Date(ts * 1000);
-                        return d.toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "2-digit",
-                        });
-                      }),
-                      datasets: [
-                        {
-                          label: "Price",
-                          data: chartData.closePrices,
-                          borderColor: "#38bdf8",
-                          backgroundColor: "rgba(56,189,248,0.1)",
-                          tension: 0.3,
-                        },
-                      ],
-                    }}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      scales: {
-                        x: { display: true },
-                        y: { display: true, beginAtZero: false },
+                <Line
+                  data={{
+                    labels: chartData.timestamps.map((ts) => {
+                      const d = new Date(ts * 1000);
+                      return d.toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "2-digit",
+                      });
+                    }),
+                    datasets: [
+                      {
+                        label: "Price",
+                        data: chartData.closePrices,
+                        borderColor: "#38bdf8",
+                        backgroundColor: "rgba(56,189,248,0.1)",
+                        tension: 0.3,
                       },
-                      plugins: {
-                        legend: { display: false },
-                      },
-                    }}
-                  />
-                </div>
+                    ],
+                  }}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                      x: { display: true },
+                      y: { display: true, beginAtZero: false },
+                    },
+                    plugins: {
+                      legend: { display: false },
+                    },
+                  }}
+                  height={300}
+                />
               )}
             </div>
           </>

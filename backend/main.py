@@ -1,5 +1,6 @@
 import os
 import time
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import requests
 from flask import Flask, jsonify, request
@@ -19,6 +20,7 @@ def add_cors_headers(response):
 # Environment variables
 POLYGON_API_KEY = os.getenv("POLYGON_API_KEY")
 FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
+FMP_API_KEY = os.getenv("FMP_API_KEY")  # Financial Modeling Prep API key
 
 @app.route("/", methods=["GET"])
 def hello():
@@ -37,7 +39,7 @@ def get_stock_data(ticker):
     polygon_resp = requests.get(polygon_url)
     try:
         polygon_data = polygon_resp.json()
-    except Exception as e:
+    except:
         return jsonify({"error": "Unable to parse JSON from Polygon (tickers)."}), 500
 
     if "results" not in polygon_data:
@@ -96,7 +98,7 @@ def get_stock_data(ticker):
         dividend_resp = requests.get(polygon_dividend_url)
         try:
             dividend_data = dividend_resp.json()
-        except Exception as e:
+        except:
             return jsonify({"error": "Unable to parse JSON from Polygon (dividends)."}), 500
 
         if "results" in dividend_data and isinstance(dividend_data["results"], list):
@@ -110,7 +112,7 @@ def get_stock_data(ticker):
                 pay_date = first_dividend.get("pay_date")
 
     # 2) Fetch real-time price from Finnhub
-    finnhub_url = f"https://finnhub.io/api/v1/quote?symbol={ticker.upper()}&token={FINNHUB_API_KEY}"
+    finnhub_url = f"https://finnhub.io/api/v1/quote?symbol={ticker}&token={FINNHUB_API_KEY}"
     finnhub_resp = requests.get(finnhub_url)
     price_data = finnhub_resp.json()
     current_price = price_data.get("c")
@@ -118,7 +120,6 @@ def get_stock_data(ticker):
     percent_change = price_data.get("dp")
 
     return jsonify({
-        # Basic
         "ticker": ticker,
         "companyName": company_name,
         "marketCap": market_cap,
@@ -128,8 +129,6 @@ def get_stock_data(ticker):
         "country": country,
         "listedOn": listed_on,
         "number": phone_number_basic,
-
-        # Advanced
         "cik": cik,
         "address": address,
         "postCode": post_code,
@@ -142,16 +141,12 @@ def get_stock_data(ticker):
         "lastUpdatedUtc": last_updated_utc,
         "roundLot": round_lot,
         "type": type_,
-
-        # Dividend
         "dividendCashAmount": dividend_cash_amount,
         "dividendDeclarationDate": dividend_declaration_date,
         "dividendType": dividend_type,
         "exDividendDate": ex_dividend_date,
         "frequency": frequency,
         "payDate": pay_date,
-
-        # Real-time price
         "realTimePrice": current_price,
         "priceChange": price_change,
         "percentChange": percent_change,
@@ -160,45 +155,53 @@ def get_stock_data(ticker):
 @app.route("/api/stock/<string:ticker>/history", methods=["GET"])
 def get_stock_history(ticker):
     """
-    Return historical price data for the given ticker over a timeframe:
-    ?timeframe=1D|1W|1M|6M|1Y|10Y
+    Return historical candle data using Financial Modeling Prep.
+    Endpoint:
+      https://financialmodelingprep.com/api/v3/historical-price-full/{ticker}?serietype=line&apikey=FMP_API_KEY
+    Query param: timeframe=1D|1W|1M|6M|1Y|10Y
     """
-    timeframe = request.args.get("timeframe", "1M")
-    now = int(time.time())
+    timeframe = request.args.get("timeframe", "1M").upper()
 
-    seconds_map = {
-        "1D": 86400,
-        "1W": 604800,
-        "1M": 2592000,
-        "6M": 15552000,
-        "1Y": 31536000,
-        "10Y": 315360000,
-    }
-    secs = seconds_map.get(timeframe, 2592000)
-    from_epoch = now - secs
-
-    # For 1D, use 5-minute resolution; otherwise daily
-    resolution = "5" if timeframe == "1D" else "D"
-
-    candle_url = "https://finnhub.io/api/v1/stock/candle"
-    params = {
-        "symbol": ticker.upper(),
-        "resolution": resolution,
-        "from": from_epoch,
-        "to": now,
-        "token": FINNHUB_API_KEY
-    }
-    resp = requests.get(candle_url, params=params)
+    # Build the URL for Financial Modeling Prep
+    fmp_url = f"https://financialmodelingprep.com/api/v3/historical-price-full/{ticker}?serietype=line&apikey={FMP_API_KEY}"
+    resp = requests.get(fmp_url)
     data = resp.json()
 
-    if data.get("s") != "ok":
-        return jsonify({"error": "No candle data found or invalid ticker"}), 404
+    if "historical" not in data or not data["historical"]:
+        return jsonify({"error": "No historical data found or invalid ticker"}), 404
+
+    # Sort historical data by date ascending
+    historical = sorted(data["historical"], key=lambda x: x["date"])
+    now = datetime.now()
+    cutoff_days = {
+        "1D": 1,
+        "1W": 7,
+        "1M": 30,
+        "6M": 180,
+        "1Y": 365,
+        "10Y": 3650,
+    }
+    days = cutoff_days.get(timeframe, 30)
+    cutoff = now - timedelta(days=days)
+    filtered = [
+        entry for entry in historical 
+        if datetime.strptime(entry["date"], "%Y-%m-%d") >= cutoff
+    ]
+    if not filtered:
+        return jsonify({"error": "No candle data found for the selected timeframe"}), 404
+
+    timestamps = []
+    closePrices = []
+    for entry in filtered:
+        dt = datetime.strptime(entry["date"], "%Y-%m-%d")
+        timestamps.append(int(dt.timestamp()))
+        closePrices.append(float(entry["close"]))
 
     return jsonify({
         "timeframe": timeframe,
-        "resolution": resolution,
-        "timestamps": data.get("t", []),
-        "closePrices": data.get("c", []),
+        "resolution": "D",
+        "timestamps": timestamps,
+        "closePrices": closePrices,
     })
 
 if __name__ == "__main__":
