@@ -247,19 +247,23 @@ def search_companies():
     if not query:
         return jsonify([]), 200
 
-    # Filter the companies_data using the keys "Company Name" and "Symbol"
-    filtered = [
-        company for company in companies_data
-        if query in company.get("Company Name", "").lower() or query in company.get("Symbol", "").lower()
-    ]
-    # Map to keys expected by the frontend: symbol, name, exchange, sector.
+    filtered = []
+    for company in companies_data:
+        # Safely convert None to "" so we can call .lower()
+        company_name = company.get("Company Name") or ""
+        company_symbol = company.get("Symbol") or ""
+        # Match either company name or symbol
+        if query in company_name.lower() or query in company_symbol.lower():
+            filtered.append(company)
+
+    # Map results to the shape your frontend expects
     result = []
     for company in filtered[:10]:
         result.append({
-            "symbol": company.get("Symbol", ""),
-            "name": company.get("Company Name", ""),
-            "exchange": company.get("Market Category", ""),
-            "sector": ""  # No sector information available
+            "symbol": company.get("Symbol", "") or "",
+            "name": company.get("Company Name", "") or "",
+            "exchange": company.get("Market Category", "") or "",
+            "sector": ""  # or something else if you have it
         })
     return jsonify(result)
 
