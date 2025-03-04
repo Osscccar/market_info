@@ -2,9 +2,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import React, { useState, useEffect } from "react";
-import { Search, TrendingUp, DollarSign, Info } from "lucide-react";
+import { TrendingUp, DollarSign, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import LoadingSpinner from "@/components/LoadingSpinner";
@@ -19,6 +18,9 @@ import {
   Legend,
 } from "chart.js";
 import { Line } from "react-chartjs-2";
+
+// Import our new search component
+import { SearchAutocomplete } from "@/components/SearchAutocomplete";
 
 ChartJS.register(
   CategoryScale,
@@ -201,27 +203,14 @@ export default function Home() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-6">Stock Information</h1>
           <div className="flex flex-col md:flex-row gap-4 items-start md:items-end mb-6">
+            {/* SearchAutocomplete replaces the old manual Input */}
             <div className="w-full md:w-1/2">
-              <label
-                htmlFor="symbol"
-                className="text-sm text-muted-foreground mb-2 block"
-              >
-                Enter a symbol/ticker (e.g. AAPL)
-              </label>
-              <div className="relative">
-                <Search
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                  size={18}
-                />
-                <Input
-                  id="symbol"
-                  type="text"
-                  value={ticker}
-                  onChange={(e) => setTicker(e.target.value.toUpperCase())}
-                  className="pl-10 bg-gray-900/70 border-gray-800/50 focus:border-gray-600"
-                  placeholder="AAPL"
-                />
-              </div>
+              <SearchAutocomplete
+                onSelectSymbol={(symbol) => {
+                  // Update ticker in state when user picks a suggestion
+                  setTicker(symbol.toUpperCase());
+                }}
+              />
             </div>
 
             <Button

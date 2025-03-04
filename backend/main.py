@@ -204,6 +204,49 @@ def get_stock_history(ticker):
         "closePrices": closePrices,
     })
 
+@app.route("/api/companies", methods=["GET", "OPTIONS"])
+def search_companies():
+    if request.method == "OPTIONS":
+        return jsonify({}), 200  # Handle CORS preflight
+
+    query = request.args.get("query", "").strip()
+    if not query:
+        # If there's no query, return an empty list
+        return jsonify([]), 200
+
+    # Example Polygon API call for searching US stocks
+    polygon_url = (
+        f"https://api.polygon.io/v3/reference/tickers"
+        f"?search={query}&market=stocks&active=true&locale=us"
+        f"&sort=ticker&order=asc&limit=10&apiKey={POLYGON_API_KEY}"
+    )
+
+    resp = requests.get(polygon_url)
+    if resp.status_code != 200:
+        # Return empty list if Polygon fails or rate-limit is hit
+        return jsonify([]), 200
+
+    data = resp.json()
+    results = data.get("results", [])
+
+    companies = []
+    for item in results:
+        symbol = item.get("ticker", "")
+        name = item.get("name", "")
+        # Some fields may be missing. Adjust as needed.
+        exchange = item.get("primary_exchange", "") or item.get("exchange", "")
+        # Polygon sometimes uses "sic_description" or "sector" for describing the company’s business
+        sector = item.get("sic_description", "") or item.get("sector", "") or item.get("type", "")
+        companies.append({
+            "symbol": symbol,
+            "name": name,
+            "exchange": exchange,
+            "sector": sector
+        })
+
+    return jsonify(companies)
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
