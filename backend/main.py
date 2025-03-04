@@ -1,4 +1,5 @@
 import os
+import json
 import time
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -10,6 +11,7 @@ load_dotenv()
 
 app = Flask(__name__)
 
+# Enable CORS for all responses
 @app.after_request
 def add_cors_headers(response):
     response.headers.add("Access-Control-Allow-Origin", "*")
@@ -17,15 +19,43 @@ def add_cors_headers(response):
     response.headers.add("Access-Control-Allow-Methods", "GET,OPTIONS")
     return response
 
-# Environment variables
+# Environment variables for API keys (used by other endpoints)
 POLYGON_API_KEY = os.getenv("POLYGON_API_KEY")
 FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
 FMP_API_KEY = os.getenv("FMP_API_KEY")  # Financial Modeling Prep API key
+
+# -----------------------------------------------------------------------------
+# LOAD LOCAL COMPANIES DATABASE
+# -----------------------------------------------------------------------------
+# The file companies.json should be in the same directory as main.py.
+# Example object in companies.json:
+# {
+#   "Symbol": "AACBU",
+#   "Company Name": "Artius II Acquisition Inc.",
+#   "Security Name": "Artius II Acquisition Inc. - Units",
+#   "Market Category": "G",
+#   "Test Issue": "N",
+#   "Financial Status": "N",
+#   "Round Lot Size": 100,
+#   "ETF": "N",
+#   "NextShares": "N"
+# }
+try:
+    with open("companies.json", "r") as f:
+        companies_data = json.load(f)
+except Exception as e:
+    companies_data = []
+    print("Error loading companies.json:", e)
+
+# -----------------------------------------------------------------------------
+# ENDPOINTS
+# -----------------------------------------------------------------------------
 
 @app.route("/", methods=["GET"])
 def hello():
     return "Backend Debugging Successful"
 
+# Endpoint to fetch stock data using Polygon and Finnhub
 @app.route("/api/stock/<string:ticker>", methods=["GET", "OPTIONS"])
 def get_stock_data(ticker):
     if request.method == "OPTIONS":
@@ -152,6 +182,7 @@ def get_stock_data(ticker):
         "percentChange": percent_change,
     })
 
+# Endpoint for historical stock data using Financial Modeling Prep
 @app.route("/api/stock/<string:ticker>/history", methods=["GET"])
 def get_stock_history(ticker):
     """
@@ -184,7 +215,7 @@ def get_stock_history(ticker):
     days = cutoff_days.get(timeframe, 30)
     cutoff = now - timedelta(days=days)
     filtered = [
-        entry for entry in historical 
+        entry for entry in historical
         if datetime.strptime(entry["date"], "%Y-%m-%d") >= cutoff
     ]
     if not filtered:
@@ -204,48 +235,33 @@ def get_stock_history(ticker):
         "closePrices": closePrices,
     })
 
+# -----------------------------------------------------------------------------
+# NEW ENDPOINT: Search Companies from Local Database
+# -----------------------------------------------------------------------------
 @app.route("/api/companies", methods=["GET", "OPTIONS"])
 def search_companies():
     if request.method == "OPTIONS":
         return jsonify({}), 200  # Handle CORS preflight
 
-    query = request.args.get("query", "").strip()
+    query = request.args.get("query", "").strip().lower()
     if not query:
-        # If there's no query, return an empty list
         return jsonify([]), 200
 
-    # Example Polygon API call for searching US stocks
-    polygon_url = (
-        f"https://api.polygon.io/v3/reference/tickers"
-        f"?search={query}&market=stocks&active=true&locale=us"
-        f"&sort=ticker&order=asc&limit=10&apiKey={POLYGON_API_KEY}"
-    )
-
-    resp = requests.get(polygon_url)
-    if resp.status_code != 200:
-        # Return empty list if Polygon fails or rate-limit is hit
-        return jsonify([]), 200
-
-    data = resp.json()
-    results = data.get("results", [])
-
-    companies = []
-    for item in results:
-        symbol = item.get("ticker", "")
-        name = item.get("name", "")
-        # Some fields may be missing. Adjust as needed.
-        exchange = item.get("primary_exchange", "") or item.get("exchange", "")
-        # Polygon sometimes uses "sic_description" or "sector" for describing the company’s business
-        sector = item.get("sic_description", "") or item.get("sector", "") or item.get("type", "")
-        companies.append({
-            "symbol": symbol,
-            "name": name,
-            "exchange": exchange,
-            "sector": sector
+    # Filter the companies_data using the keys "Company Name" and "Symbol"
+    filtered = [
+        company for company in companies_data
+        if query in company.get("Company Name", "").lower() or query in company.get("Symbol", "").lower()
+    ]
+    # Map to keys expected by the frontend: symbol, name, exchange, sector.
+    result = []
+    for company in filtered[:10]:
+        result.append({
+            "symbol": company.get("Symbol", ""),
+            "name": company.get("Company Name", ""),
+            "exchange": company.get("Market Category", ""),
+            "sector": ""  # No sector information available
         })
-
-    return jsonify(companies)
-
+    return jsonify(result)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
