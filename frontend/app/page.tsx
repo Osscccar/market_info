@@ -162,14 +162,12 @@ export default function Home() {
   function handleAdvancedToggle(val: boolean) {
     setAdvancedMode(val);
     if (ticker.trim() !== "") {
-      handleFetch();
     }
   }
 
   function handleDividendToggle(val: boolean) {
     setDividendMode(val);
     if (ticker.trim() !== "") {
-      handleFetch();
     }
   }
 
