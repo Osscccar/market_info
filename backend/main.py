@@ -186,22 +186,22 @@ def get_stock_data(ticker):
 @app.route("/api/stock/<string:ticker>/history", methods=["GET"])
 def get_stock_history(ticker):
     """
-    Return historical candle data using Financial Modeling Prep.
-    Endpoint:
-      https://financialmodelingprep.com/api/v3/historical-price-full/{ticker}?serietype=line&apikey=FMP_API_KEY
+    Return historical OHLC candle data from Financial Modeling Prep,
+    plus optional dividend dots from Polygon if ?dividend=true is passed.
     Query param: timeframe=1D|1W|1M|6M|1Y|10Y
     """
     timeframe = request.args.get("timeframe", "1M").upper()
+    dividend_mode = request.args.get("dividend", "false").lower() == "true"
 
-    # Build the URL for Financial Modeling Prep
-    fmp_url = f"https://financialmodelingprep.com/api/v3/historical-price-full/{ticker}?serietype=line&apikey={FMP_API_KEY}"
+    # 1) Fetch OHLC from Financial Modeling Prep
+    fmp_url = f"https://financialmodelingprep.com/api/v3/historical-price-full/{ticker}?apikey={FMP_API_KEY}"
     resp = requests.get(fmp_url)
     data = resp.json()
 
     if "historical" not in data or not data["historical"]:
         return jsonify({"error": "No historical data found or invalid ticker"}), 404
 
-    # Sort historical data by date ascending
+    # Sort by date ascending
     historical = sorted(data["historical"], key=lambda x: x["date"])
     now = datetime.now()
     cutoff_days = {
@@ -221,19 +221,48 @@ def get_stock_history(ticker):
     if not filtered:
         return jsonify({"error": "No candle data found for the selected timeframe"}), 404
 
-    timestamps = []
-    closePrices = []
+    # Build arrays for timestamps and OHLC
+    ohlc_data = []
     for entry in filtered:
         dt = datetime.strptime(entry["date"], "%Y-%m-%d")
-        timestamps.append(int(dt.timestamp()))
-        closePrices.append(float(entry["close"]))
+        # Convert date to ms for Chart.js financial scale
+        t_ms = int(dt.timestamp() * 1000)
+        ohlc_data.append({
+            "t": t_ms,
+            "o": float(entry["open"]),
+            "h": float(entry["high"]),
+            "l": float(entry["low"]),
+            "c": float(entry["close"]),
+        })
+
+    # 2) (Optional) Dividend events from Polygon if ?dividend=true
+    dividend_events = []
+    if dividend_mode and POLYGON_API_KEY:
+        polygon_dividend_url = f"https://api.polygon.io/v3/reference/dividends?ticker={ticker}&apiKey={POLYGON_API_KEY}"
+        d_resp = requests.get(polygon_dividend_url)
+        d_data = d_resp.json()
+        if "results" in d_data and isinstance(d_data["results"], list):
+            for div in d_data["results"]:
+                ex_date_str = div.get("ex_dividend_date")
+                if ex_date_str:
+                    try:
+                        ex_dt = datetime.strptime(ex_date_str, "%Y-%m-%d")
+                        ex_ms = int(ex_dt.timestamp() * 1000)
+                        # We'll store the amount in "amount"
+                        # The chart can place a dot on the close or open price.
+                        dividend_events.append({
+                            "t": ex_ms,
+                            "amount": div.get("cash_amount", 0.0),
+                        })
+                    except:
+                        pass
 
     return jsonify({
         "timeframe": timeframe,
-        "resolution": "D",
-        "timestamps": timestamps,
-        "closePrices": closePrices,
+        "ohlc": ohlc_data,         # array of {t, o, h, l, c}
+        "dividends": dividend_events,  # array of {t, amount}
     })
+
 
 # -----------------------------------------------------------------------------
 # NEW ENDPOINT: Search Companies from Local Database

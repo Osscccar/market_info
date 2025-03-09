@@ -7,29 +7,33 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import { SearchAutocomplete } from "@/components/SearchAutocomplete";
+
+// --- NEW IMPORTS ---
 import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
-  PointElement,
-  LineElement,
-  Title as ChartTitle,
+  TimeScale,
   Tooltip,
   Legend,
 } from "chart.js";
-import { Line } from "react-chartjs-2";
+import {
+  CandlestickController,
+  CandlestickElement,
+} from "chartjs-chart-financial";
+import crosshairPlugin from "chartjs-plugin-crosshair";
 
-// Import our new search component
-import { SearchAutocomplete } from "@/components/SearchAutocomplete";
-
+// Register for candlesticks + crosshair
 ChartJS.register(
   CategoryScale,
   LinearScale,
-  PointElement,
-  LineElement,
-  ChartTitle,
+  TimeScale,
   Tooltip,
-  Legend
+  Legend,
+  CandlestickController,
+  CandlestickElement,
+  crosshairPlugin
 );
 
 interface StockData {
@@ -72,6 +76,19 @@ interface StockData {
   percentChange?: number;
 }
 
+interface OhlcData {
+  t: number; // timestamp in ms
+  o: number;
+  h: number;
+  l: number;
+  c: number;
+}
+
+interface DividendEvent {
+  t: number; // timestamp in ms
+  amount: number;
+}
+
 export default function Home() {
   const [ticker, setTicker] = useState("");
   const [stockData, setStockData] = useState<StockData | null>(null);
@@ -83,13 +100,12 @@ export default function Home() {
   // For chart
   const [timeframe, setTimeframe] = useState("1M");
   const [chartLoading, setChartLoading] = useState(false);
-  const [chartData, setChartData] = useState<{
-    timestamps: number[];
-    closePrices: number[];
-  } | null>(null);
+  const [ohlcData, setOhlcData] = useState<OhlcData[]>([]);
+  const [dividends, setDividends] = useState<DividendEvent[]>([]);
+
   const timeframeOptions = ["1D", "1W", "1M", "6M", "1Y", "10Y"];
 
-  // Fetch main stock data and then automatically fetch 1M chart data
+  // Fetch main stock data
   async function handleFetch() {
     setError("");
     setStockData(null);
@@ -123,28 +139,34 @@ export default function Home() {
     }
   }
 
-  // Fetch chart data
+  // Fetch chart data (candlesticks + dividends)
   async function fetchChartData(tf: string) {
     if (!ticker) return;
     setChartLoading(true);
     setError("");
+
     try {
-      const url = `https://market-info-m22z.onrender.com/api/stock/${ticker}/history?timeframe=${tf}`;
+      const urlParams = new URLSearchParams();
+      urlParams.set("timeframe", tf);
+      // Also pass ?dividend=true if user wants dividend info
+      if (dividendMode) urlParams.set("dividend", "true");
+
+      const url = `https://market-info-m22z.onrender.com/api/stock/${ticker}/history?${urlParams.toString()}`;
       const res = await fetch(url);
       if (!res.ok) {
         const err = await res.json();
         setError(err.error || "Unknown error from backend.");
-        setChartData(null);
+        setOhlcData([]);
+        setDividends([]);
         return;
       }
       const data = await res.json();
-      setChartData({
-        timestamps: data.timestamps,
-        closePrices: data.closePrices,
-      });
+      setOhlcData(data.ohlc || []);
+      setDividends(data.dividends || []);
     } catch (err: any) {
       setError(err.message);
-      setChartData(null);
+      setOhlcData([]);
+      setDividends([]);
     } finally {
       setChartLoading(false);
     }
@@ -161,38 +183,123 @@ export default function Home() {
   // Toggle handlers
   function handleAdvancedToggle(val: boolean) {
     setAdvancedMode(val);
+    // Re-fetch main data if ticker is set
     if (ticker.trim() !== "") {
+      handleFetch();
     }
   }
 
   function handleDividendToggle(val: boolean) {
     setDividendMode(val);
+    // Re-fetch main data if ticker is set
     if (ticker.trim() !== "") {
+      handleFetch();
     }
   }
 
-  // Prepare chart.js data
-  const chartJsData = chartData
-    ? {
-        labels: chartData.timestamps.map((ts) => {
-          const d = new Date(ts * 1000);
-          return d.toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-            year: "2-digit",
-          });
-        }),
-        datasets: [
-          {
-            label: "Price",
-            data: chartData.closePrices,
-            borderColor: "#38bdf8",
-            backgroundColor: "rgba(56,189,248,0.1)",
-            tension: 0.3,
-          },
-        ],
-      }
-    : null;
+  // Build Candlestick + Dividend Dot Data
+  const chartDatasets = [
+    {
+      label: "Candles",
+      data: ohlcData.map((d) => ({
+        x: d.t,
+        o: d.o,
+        h: d.h,
+        l: d.l,
+        c: d.c,
+      })),
+      type: "candlestick" as const,
+      // color config for candlesticks
+      borderColor: {
+        up: "#16a34a", // green
+        down: "#dc2626", // red
+        unchanged: "#ccc",
+      },
+      color: {
+        up: "#16a34a",
+        down: "#dc2626",
+        unchanged: "#ccc",
+      },
+    },
+  ];
+
+  // If we have dividends, add a scatter dataset
+  if (dividends.length > 0) {
+    // We'll place each dividend dot at the day's close price.
+    // For that, we find the matching day in ohlcData
+    const dividendPoints = dividends
+      .map((div) => {
+        // Find a matching candle with the same day (rough match ignoring time?)
+        const candle = ohlcData.find((c) => {
+          const candleDate = new Date(c.t);
+          const divDate = new Date(div.t);
+          return (
+            candleDate.getUTCFullYear() === divDate.getUTCFullYear() &&
+            candleDate.getUTCMonth() === divDate.getUTCMonth() &&
+            candleDate.getUTCDate() === divDate.getUTCDate()
+          );
+        });
+        return {
+          x: div.t,
+          y: candle ? candle.c : undefined, // place dot at the close price
+        };
+      })
+      .filter((p) => p.y !== undefined);
+
+    chartDatasets.push({
+      label: "Dividends",
+      data: dividendPoints,
+      type: "scatter" as const,
+      pointRadius: 5,
+      pointBackgroundColor: "#fde047", // bright yellow
+    });
+  }
+
+  // ChartJS config
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: {
+        type: "time" as const,
+        time: {
+          unit: "day",
+        },
+        display: true,
+        grid: {
+          color: "#333",
+        },
+      },
+      y: {
+        display: true,
+        grid: {
+          color: "#333",
+        },
+      },
+    },
+    plugins: {
+      legend: { display: false },
+      crosshair: {
+        line: {
+          color: "#888", // crosshair line color
+          width: 1,
+        },
+        sync: {
+          enabled: false, // no sync with other charts
+        },
+        zoom: {
+          enabled: false, // disable zoom
+        },
+        snap: {
+          enabled: true,
+        },
+      },
+      tooltip: {
+        mode: "nearest" as const,
+        intersect: false,
+      },
+    },
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -201,11 +308,9 @@ export default function Home() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-6">Stock Information</h1>
           <div className="flex flex-col md:flex-row gap-4 items-start md:items-end mb-6">
-            {/* SearchAutocomplete replaces the old manual Input */}
             <div className="w-full md:w-1/2">
               <SearchAutocomplete
                 onSelectSymbol={(symbol) => {
-                  // Update ticker in state when user picks a suggestion
                   setTicker(symbol.toUpperCase());
                 }}
               />
@@ -490,7 +595,7 @@ export default function Home() {
               )}
             </div>
 
-            {/* Price History Card (Line Chart) */}
+            {/* Price History (Candlestick) */}
             <div className="bg-gray-900/50 border border-gray-800/50 rounded-lg p-4 mt-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xl font-semibold">
@@ -511,39 +616,13 @@ export default function Home() {
               {chartLoading && (
                 <p className="text-gray-400">Loading chart...</p>
               )}
-              {!chartLoading && chartData && (
-                <div className="h-80">
-                  <Line
-                    data={{
-                      labels: chartData.timestamps.map((ts) => {
-                        const d = new Date(ts * 1000);
-                        return d.toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "2-digit",
-                        });
-                      }),
-                      datasets: [
-                        {
-                          label: "Price",
-                          data: chartData.closePrices,
-                          borderColor: "#38bdf8",
-                          backgroundColor: "rgba(56,189,248,0.1)",
-                          tension: 0.3,
-                        },
-                      ],
-                    }}
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      scales: {
-                        x: { display: true },
-                        y: { display: true, beginAtZero: false },
-                      },
-                      plugins: {
-                        legend: { display: false },
-                      },
-                    }}
+              {!chartLoading && ohlcData.length > 0 && (
+                <div className="h-96">
+                  {/* We do a standard <canvas> approach with chart.js in react, or react-chartjs-2's <Chart> */}
+                  {/* But let's do a minimal inline approach with "react-chartjs-2" if you prefer. */}
+                  <canvas
+                    id="candlestick-chart"
+                    style={{ width: "100%", height: "100%" }}
                   />
                 </div>
               )}
@@ -551,6 +630,62 @@ export default function Home() {
           </>
         )}
       </main>
+
+      {/* Initialize the chart after data changes */}
+      {!chartLoading && ohlcData.length > 0 && (
+        <CandlestickInitializer
+          chartId="candlestick-chart"
+          datasets={chartDatasets}
+          options={chartOptions}
+        />
+      )}
     </div>
   );
+}
+
+// ---------------------------------------------------------------------
+// Helper component to create the Candlestick chart after data is loaded
+// ---------------------------------------------------------------------
+import { useRef, useEffect as useLayoutEffect } from "react";
+import { Chart } from "react-chartjs-2";
+
+function CandlestickInitializer({
+  chartId,
+  datasets,
+  options,
+}: {
+  chartId: string;
+  datasets: any[];
+  options: any;
+}) {
+  const chartRef = useRef<ChartJS | null>(null);
+
+  useLayoutEffect(() => {
+    const canvas = document.getElementById(chartId) as HTMLCanvasElement;
+    if (!canvas) return;
+
+    // Destroy old chart if it exists
+    if (chartRef.current) {
+      chartRef.current.destroy();
+      chartRef.current = null;
+    }
+
+    // Create new chart
+    chartRef.current = new ChartJS(canvas, {
+      type: "candlestick",
+      data: {
+        datasets: datasets,
+      },
+      options: options,
+    });
+
+    return () => {
+      if (chartRef.current) {
+        chartRef.current.destroy();
+        chartRef.current = null;
+      }
+    };
+  }, [chartId, datasets, options]);
+
+  return null;
 }

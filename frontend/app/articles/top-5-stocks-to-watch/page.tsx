@@ -5,7 +5,7 @@ import Navbar from "@/components/Navbar";
 export default function Page() {
   const article = {
     title: "Top 5 Stocks to Watch in 2025",
-    author: "John Smith",
+    author: "Market Analyst Admin",
     date: "2025-03-10",
     image: "/placeholder.svg?height=400&width=800",
     content: `

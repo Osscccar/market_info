@@ -9,7 +9,7 @@ const articles = [
     title: "US Market Crashes, Billions Lost in a Single Day",
     excerpt:
       "Major indexes tumbled, wiping out billions of dollars in market value as panic spreads among investors.",
-    author: "Alice Thompson",
+    author: "Market Analyst Admin",
     date: "2025-03-16",
     image: "/stockcrash2025march.png?height=200&width=400",
   },
@@ -18,7 +18,7 @@ const articles = [
     title: "Understanding Market Volatility: A Beginner's Guide",
     excerpt:
       "Learn about what causes market volatility and how to navigate turbulent times in the stock market.",
-    author: "Jane Doe",
+    author: "Market Analyst Admin",
     date: "2025-03-15",
     image: "/market.jpg?height=200&width=400",
   },
@@ -27,7 +27,7 @@ const articles = [
     title: "Top 5 Stocks to Watch in 2025",
     excerpt:
       "Discover the most promising stocks that analysts are keeping an eye on for the upcoming year.",
-    author: "John Smith",
+    author: "Market Analyst Admin",
     date: "2025-03-10",
     image: "/placeholder.svg?height=200&width=400",
   },
@@ -36,7 +36,7 @@ const articles = [
     title: "Investing Strategies for Beginners",
     excerpt:
       "Get started with investing by learning these fundamental strategies that every beginner should know.",
-    author: "Emily Johnson",
+    author: "Market Analyst Admin",
     date: "2025-03-05",
     image: "/placeholder.svg?height=200&width=400",
   },

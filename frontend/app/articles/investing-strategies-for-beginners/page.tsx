@@ -4,9 +4,9 @@ import { CalendarDays } from "lucide-react";
 export default function Page() {
   const article = {
     title: "Investing Strategies for Beginners",
-    author: "Emily Johnson",
+    author: "Market Analyst Admin",
     date: "2025-03-05",
-    image: "/placeholder.svg?height=400&width=800",
+    image: "/images/stockcrash2025march",
     content: `
       <p>Investing can seem daunting for beginners, but with the right strategies, anyone can start building their wealth. 
       Here are some fundamental investing strategies that every beginner should know:</p>
