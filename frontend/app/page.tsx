@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import LoadingSpinner from "@/components/LoadingSpinner";
 
 // -----------------------------------------
-// New imports for Chart.js and plugins
+// NEW: Import all needed Chart.js modules
 // -----------------------------------------
 import {
   Chart as ChartJS,
@@ -18,31 +18,37 @@ import {
   TimeScale,
   Tooltip,
   Legend,
-  LineController, // <--- required for "scatter"
-  LineElement, // <--- also needed
+  // For scatter (dividend dots):
   PointElement,
+  LineElement,
+  LineController,
 } from "chart.js";
-import "chartjs-adapter-date-fns"; // Adapter for time scale
+
 import {
   CandlestickController,
   CandlestickElement,
 } from "chartjs-chart-financial";
 import crosshairPlugin from "chartjs-plugin-crosshair";
+import "chartjs-adapter-date-fns";
 import { Chart } from "react-chartjs-2";
 
 import { SearchAutocomplete } from "@/components/SearchAutocomplete";
 
-// Register Chart.js components and plugins
+// -----------------------------------------
+// REGISTER CHART.JS COMPONENTS & PLUGINS
+// -----------------------------------------
 ChartJS.register(
   CategoryScale,
   LinearScale,
   TimeScale,
-  // Candlestick stuff
+  // Candlestick
   CandlestickController,
   CandlestickElement,
-  // Add PointElement for scatter
+  // Scatter / line
+  LineController,
+  LineElement,
   PointElement,
-  // ...
+  // Plugins
   Tooltip,
   Legend,
   crosshairPlugin
@@ -61,6 +67,8 @@ interface DividendData {
   y: number; // Price at that date
   amount: number;
 }
+
+// Basic shape of your stock data
 interface StockData {
   // Basic
   ticker: string;
@@ -72,6 +80,7 @@ interface StockData {
   country: string;
   listedOn: string;
   number?: string;
+
   // Advanced
   primaryExchange?: string;
   shareClassFigi?: string;
@@ -85,13 +94,15 @@ interface StockData {
   lastUpdatedUtc?: string;
   compositeFigi?: string;
   phoneNumber?: string;
-  // Dividend (from stockData endpoint)
+
+  // Dividend
   dividendCashAmount?: number;
   dividendDeclarationDate?: string;
   dividendType?: string;
   exDividendDate?: string;
   frequency?: number;
   payDate?: string;
+
   // Real-time
   realTimePrice?: number;
   priceChange?: number;
@@ -106,7 +117,7 @@ export default function Home() {
   const [advancedMode, setAdvancedMode] = useState(false);
   const [dividendMode, setDividendMode] = useState(false);
 
-  // Chart data states
+  // Chart states
   const [timeframe, setTimeframe] = useState("1M");
   const [chartLoading, setChartLoading] = useState(false);
   const [candles, setCandles] = useState<CandleData[]>([]);
@@ -141,6 +152,8 @@ export default function Home() {
       }
       const data = await res.json();
       setStockData(data);
+
+      // After fetching main data, fetch candlestick data for default timeframe
       await fetchCandlestickData("1M");
     } catch (err: any) {
       setError(err.message);
@@ -210,10 +223,11 @@ export default function Home() {
   }
 
   // ------------------------------------------------
-  // Build Chart.js data for Candlestick & Dividend points
+  // Build Chart.js data
   // ------------------------------------------------
   const chartData = {
     datasets: [
+      // Candlestick dataset
       {
         label: "Candlestick",
         data: candles.map((c) => ({
@@ -225,11 +239,12 @@ export default function Home() {
         })),
         type: "candlestick" as const,
         color: {
-          up: "#22c55e", // green for bullish
-          down: "#ef4444", // red for bearish
+          up: "#22c55e", // green
+          down: "#ef4444", // red
           unchanged: "#999999",
         },
       },
+      // Scatter dataset for dividend dots
       {
         label: "Dividends",
         data: dividends.map((d) => ({
@@ -237,13 +252,13 @@ export default function Home() {
           y: d.y,
         })),
         type: "scatter" as const,
-        pointBackgroundColor: "#eab308", // gold
+        pointBackgroundColor: "#eab308",
         pointRadius: 5,
       },
     ],
   };
 
-  // Cast chartData as any to fix type issues with mixed dataset types
+  // Cast as any to avoid type errors about mixing candlestick & scatter
   const chartDataAny: any = chartData;
 
   const chartOptions: any = {
@@ -251,11 +266,14 @@ export default function Home() {
     maintainAspectRatio: false,
     scales: {
       x: {
-        type: "time", // time scale using chartjs-adapter-date-fns
+        type: "time",
         time: { unit: "day" },
         display: true,
       },
-      y: { display: true, beginAtZero: false },
+      y: {
+        display: true,
+        beginAtZero: false,
+      },
     },
     interaction: { mode: "nearest", intersect: false },
     plugins: {
@@ -275,7 +293,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <main className="container mx-auto px-4 py-8">
-        {/* Input & Toggles */}
+        {/* Input & Toggles at the Top */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-6">Stock Information</h1>
           <div className="flex flex-col md:flex-row gap-4 items-start md:items-end mb-6">
@@ -286,6 +304,7 @@ export default function Home() {
                 }}
               />
             </div>
+
             <Button
               onClick={handleFetch}
               className="bg-gray-800 hover:bg-gray-700 text-white"
@@ -322,6 +341,7 @@ export default function Home() {
         {error && <p className="text-red-500 mt-4">{error}</p>}
         {loading && <LoadingSpinner />}
 
+        {/* Stock Data Section */}
         {stockData && (
           <>
             {/* Price Section */}
@@ -359,6 +379,7 @@ export default function Home() {
 
             {/* Cards Section */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Basic Info Card */}
               <Card className="bg-gray-900/50 border-gray-800/50">
                 <CardHeader className="border-b border-gray-800/50 pb-3">
                   <CardTitle className="flex items-center text-xl">
@@ -426,6 +447,7 @@ export default function Home() {
                 </CardContent>
               </Card>
 
+              {/* Advanced Info Card */}
               {advancedMode && (
                 <Card className="bg-gray-900/50 border-gray-800/50">
                   <CardHeader className="border-b border-gray-800/50 pb-3">
@@ -435,11 +457,12 @@ export default function Home() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-4 text-sm">
-                    {/* Add your advanced fields here */}
+                    {/* Add your advanced fields from stockData here */}
                   </CardContent>
                 </Card>
               )}
 
+              {/* Dividend Info Card */}
               {dividendMode && (
                 <Card className="bg-gray-900/50 border-gray-800/50">
                   <CardHeader className="border-b border-gray-800/50 pb-3">
@@ -449,13 +472,13 @@ export default function Home() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-4 text-sm">
-                    {/* Add your dividend fields here */}
+                    {/* Add your dividend fields from stockData here */}
                   </CardContent>
                 </Card>
               )}
             </div>
 
-            {/* Price History Card (Candlestick Chart with Dividends and Crosshair) */}
+            {/* Price History Card (Candlestick + Dividends) */}
             <div className="bg-gray-900/50 border border-gray-800/50 rounded-lg p-4 mt-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xl font-semibold">
@@ -479,8 +502,8 @@ export default function Home() {
               {!chartLoading && candles.length > 0 && (
                 <div className="h-80">
                   <Chart
-                    type="candlestick" // <--- the Chart type
-                    data={chartDataAny} // <--- your chart data
+                    type="candlestick"
+                    data={chartDataAny}
                     options={chartOptions}
                   />
                 </div>
