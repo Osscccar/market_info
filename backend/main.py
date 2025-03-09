@@ -41,9 +41,7 @@ except Exception as e:
 def hello():
     return "Backend Debugging Successful"
 
-# ---------------------------
 # 1) Stock Data Endpoint
-# ---------------------------
 @app.route("/api/stock/<string:ticker>", methods=["GET", "OPTIONS"])
 def get_stock_data(ticker):
     if request.method == "OPTIONS":
@@ -57,7 +55,7 @@ def get_stock_data(ticker):
     try:
         polygon_resp = requests.get(polygon_url)
         polygon_data = polygon_resp.json()
-    except Exception as e:
+    except Exception:
         return jsonify({"error": "Error fetching data from Polygon"}), 500
 
     if "results" not in polygon_data:
@@ -102,7 +100,7 @@ def get_stock_data(ticker):
         try:
             dividend_resp = requests.get(polygon_dividend_url)
             dividend_data = dividend_resp.json()
-        except Exception as e:
+        except Exception:
             return jsonify({"error": "Error fetching dividend data from Polygon"}), 500
 
         if "results" in dividend_data and isinstance(dividend_data["results"], list) and len(dividend_data["results"]) > 0:
@@ -119,7 +117,7 @@ def get_stock_data(ticker):
     try:
         finnhub_resp = requests.get(finnhub_url)
         price_data = finnhub_resp.json()
-    except Exception as e:
+    except Exception:
         return jsonify({"error": "Error fetching price data from Finnhub"}), 500
 
     current_price = price_data.get("c")
@@ -159,9 +157,7 @@ def get_stock_data(ticker):
         "percentChange": percent_change,
     })
 
-# ---------------------------
 # 2) Historical Candlestick Data + Dividends Endpoint
-# ---------------------------
 @app.route("/api/stock/<string:ticker>/history", methods=["GET"])
 def get_stock_history(ticker):
     """
@@ -172,12 +168,12 @@ def get_stock_history(ticker):
     timeframe = request.args.get("timeframe", "1M").upper()
     dividend_mode = request.args.get("dividend", "false").lower() == "true"
 
-    # Fetch from FMP
+    # Fetch historical data from FMP
     fmp_url = f"https://financialmodelingprep.com/api/v3/historical-price-full/{ticker}?serietype=line&apikey={FMP_API_KEY}"
     try:
         resp = requests.get(fmp_url)
         data = resp.json()
-    except Exception as e:
+    except Exception:
         return jsonify({"error": "Error fetching historical data from FMP"}), 500
 
     if "historical" not in data or not data["historical"]:
@@ -250,13 +246,11 @@ def get_stock_history(ticker):
         "dividends": dividends,
     })
 
-# ---------------------------
 # 3) Search Companies Endpoint
-# ---------------------------
 @app.route("/api/companies", methods=["GET", "OPTIONS"])
 def search_companies():
     if request.method == "OPTIONS":
-        return jsonify({}), 200  # CORS preflight
+        return jsonify({}), 200
 
     query = request.args.get("query", "").strip().lower()
     if not query:

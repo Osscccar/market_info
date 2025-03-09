@@ -236,6 +236,9 @@ export default function Home() {
     ],
   };
 
+  // Cast chartData as any to fix type issues with mixed dataset types
+  const chartDataAny: any = chartData;
+
   const chartOptions: any = {
     responsive: true,
     maintainAspectRatio: false,
@@ -470,7 +473,7 @@ export default function Home() {
                 <div className="h-80">
                   <Chart
                     type="candlestick"
-                    data={chartData}
+                    data={chartDataAny}
                     options={chartOptions}
                   />
                 </div>
