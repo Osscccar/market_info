@@ -18,6 +18,7 @@ import {
   TimeScale,
   Tooltip,
   Legend,
+  PointElement,
 } from "chart.js";
 import "chartjs-adapter-date-fns"; // Adapter for time scale
 import {
@@ -34,8 +35,12 @@ ChartJS.register(
   CategoryScale,
   LinearScale,
   TimeScale,
+  // Candlestick stuff
   CandlestickController,
   CandlestickElement,
+  // Add PointElement for scatter
+  PointElement,
+  // ...
   Tooltip,
   Legend,
   crosshairPlugin
