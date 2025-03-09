@@ -65,6 +65,7 @@ interface DividendData {
 
 // Basic stock data shape
 interface StockData {
+  // Basic
   ticker: string;
   companyName: string;
   marketCap: number;
@@ -74,6 +75,8 @@ interface StockData {
   country: string;
   listedOn: string;
   number?: string;
+
+  // Advanced
   primaryExchange?: string;
   shareClassFigi?: string;
   cik?: string;
@@ -86,12 +89,16 @@ interface StockData {
   lastUpdatedUtc?: string;
   compositeFigi?: string;
   phoneNumber?: string;
+
+  // Dividend
   dividendCashAmount?: number;
   dividendDeclarationDate?: string;
   dividendType?: string;
   exDividendDate?: string;
   frequency?: number;
   payDate?: string;
+
+  // Real-time
   realTimePrice?: number;
   priceChange?: number;
   percentChange?: number;
@@ -234,7 +241,7 @@ export default function Home() {
           x: d.t * 1000,
           y: d.y,
         })),
-        // Use line controller with showLine: false to simulate a scatter chart
+        // Use line controller with showLine: false to simulate scatter
         type: "line" as const,
         showLine: false,
         pointBackgroundColor: "#eab308",
@@ -320,8 +327,10 @@ export default function Home() {
             </div>
           </div>
         </div>
+
         {error && <p className="text-red-500 mt-4">{error}</p>}
         {loading && <LoadingSpinner />}
+
         {stockData && (
           <>
             {/* Price Section */}
@@ -359,6 +368,7 @@ export default function Home() {
 
             {/* Cards Section */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Basic Info Card */}
               <Card className="bg-gray-900/50 border-gray-800/50">
                 <CardHeader className="border-b border-gray-800/50 pb-3">
                   <CardTitle className="flex items-center text-xl">
@@ -426,6 +436,7 @@ export default function Home() {
                 </CardContent>
               </Card>
 
+              {/* Advanced Info Card */}
               {advancedMode && (
                 <Card className="bg-gray-900/50 border-gray-800/50">
                   <CardHeader className="border-b border-gray-800/50 pb-3">
@@ -435,11 +446,83 @@ export default function Home() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-4 text-sm">
-                    {/* Advanced info fields can be added here */}
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Primary Exchange:</span>
+                      <span className="font-medium">
+                        {stockData.primaryExchange || "N/A"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Share Class Figi:</span>
+                      <span className="font-medium">
+                        {stockData.shareClassFigi || "N/A"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">CIK:</span>
+                      <span className="font-medium">
+                        {stockData.cik || "N/A"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Address:</span>
+                      <span className="font-medium">
+                        {stockData.address || "N/A"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Post Code:</span>
+                      <span className="font-medium">
+                        {stockData.postCode || "N/A"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">City:</span>
+                      <span className="font-medium">
+                        {stockData.city || "N/A"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">State:</span>
+                      <span className="font-medium">
+                        {stockData.state || "N/A"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Phone (Adv.):</span>
+                      <span className="font-medium">
+                        {stockData.phoneNumber || "N/A"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Type:</span>
+                      <span className="font-medium">
+                        {stockData.type || "N/A"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Last Updated UTC:</span>
+                      <span className="font-medium">
+                        {stockData.lastUpdatedUtc || "N/A"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Composite Figi:</span>
+                      <span className="font-medium">
+                        {stockData.compositeFigi || "N/A"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Round Lot:</span>
+                      <span className="font-medium">
+                        {stockData.roundLot || "N/A"}
+                      </span>
+                    </div>
                   </CardContent>
                 </Card>
               )}
 
+              {/* Dividend Info Card */}
               {dividendMode && (
                 <Card className="bg-gray-900/50 border-gray-800/50">
                   <CardHeader className="border-b border-gray-800/50 pb-3">
@@ -449,13 +532,64 @@ export default function Home() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-4 text-sm">
-                    {/* Dividend info fields can be added here */}
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">
+                        Dividend Cash Amount:
+                      </span>
+                      <span className="font-medium">
+                        {stockData.dividendCashAmount !== undefined
+                          ? stockData.dividendCashAmount
+                          : "N/A"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">
+                        Dividend Declaration Date:
+                      </span>
+                      <span className="font-medium">
+                        {stockData.dividendDeclarationDate !== undefined
+                          ? stockData.dividendDeclarationDate
+                          : "N/A"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Dividend Type:</span>
+                      <span className="font-medium">
+                        {stockData.dividendType !== undefined
+                          ? stockData.dividendType
+                          : "N/A"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Ex Dividend Date:</span>
+                      <span className="font-medium">
+                        {stockData.exDividendDate !== undefined
+                          ? stockData.exDividendDate
+                          : "N/A"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Frequency:</span>
+                      <span className="font-medium">
+                        {stockData.frequency !== undefined
+                          ? stockData.frequency
+                          : "N/A"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Pay Date:</span>
+                      <span className="font-medium">
+                        {stockData.payDate !== undefined
+                          ? stockData.payDate
+                          : "N/A"}
+                      </span>
+                    </div>
                   </CardContent>
                 </Card>
               )}
             </div>
 
-            {/* Price History Card (Candlestick Chart with Dividends and Crosshair) */}
+            {/* Price History Card (Candlestick + Dividends) */}
             <div className="bg-gray-900/50 border border-gray-800/50 rounded-lg p-4 mt-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xl font-semibold">
