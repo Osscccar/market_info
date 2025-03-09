@@ -27,19 +27,6 @@ FMP_API_KEY = os.getenv("FMP_API_KEY")  # Financial Modeling Prep API key
 # -----------------------------------------------------------------------------
 # LOAD LOCAL COMPANIES DATABASE
 # -----------------------------------------------------------------------------
-# The file companies.json should be in the same directory as main.py.
-# Example object in companies.json:
-# {
-#   "Symbol": "AACBU",
-#   "Company Name": "Artius II Acquisition Inc.",
-#   "Security Name": "Artius II Acquisition Inc. - Units",
-#   "Market Category": "G",
-#   "Test Issue": "N",
-#   "Financial Status": "N",
-#   "Round Lot Size": 100,
-#   "ETF": "N",
-#   "NextShares": "N"
-# }
 try:
     with open("companies.json", "r") as f:
         companies_data = json.load(f)
@@ -55,7 +42,9 @@ except Exception as e:
 def hello():
     return "Backend Debugging Successful"
 
-# Endpoint to fetch stock data using Polygon and Finnhub
+# -----------------------------------------------------------------------------
+# 1) Fetch Stock Data (Polygon + Finnhub)
+# -----------------------------------------------------------------------------
 @app.route("/api/stock/<string:ticker>", methods=["GET", "OPTIONS"])
 def get_stock_data(ticker):
     if request.method == "OPTIONS":
@@ -64,7 +53,7 @@ def get_stock_data(ticker):
     advanced_mode = request.args.get("advanced", "false").lower() == "true"
     dividend_mode = request.args.get("dividend", "false").lower() == "true"
 
-    # 1) Fetch from Polygon for basic/advanced data
+    # 1) Basic + Advanced from Polygon
     polygon_url = f"https://api.polygon.io/v3/reference/tickers/{ticker}?apiKey={POLYGON_API_KEY}"
     polygon_resp = requests.get(polygon_url)
     try:
@@ -115,7 +104,7 @@ def get_stock_data(ticker):
         type_ = results.get("type")
         round_lot = results.get("round_lot")
 
-    # Dividend fields
+    # Dividend fields (from Polygon dividends)
     dividend_cash_amount = None
     dividend_declaration_date = None
     dividend_type = None
@@ -141,7 +130,7 @@ def get_stock_data(ticker):
                 frequency = first_dividend.get("frequency")
                 pay_date = first_dividend.get("pay_date")
 
-    # 2) Fetch real-time price from Finnhub
+    # 2) Real-time price from Finnhub
     finnhub_url = f"https://finnhub.io/api/v1/quote?symbol={ticker}&token={FINNHUB_API_KEY}"
     finnhub_resp = requests.get(finnhub_url)
     price_data = finnhub_resp.json()
@@ -182,16 +171,20 @@ def get_stock_data(ticker):
         "percentChange": percent_change,
     })
 
-# Endpoint for historical stock data using Financial Modeling Prep
+# -----------------------------------------------------------------------------
+# 2) Historical Candlestick Data + Dividends for Chart
+# -----------------------------------------------------------------------------
 @app.route("/api/stock/<string:ticker>/history", methods=["GET"])
 def get_stock_history(ticker):
     """
-    Return historical candle data using Financial Modeling Prep.
+    Return historical candlestick data using Financial Modeling Prep (FMP).
+    If ?dividend=true, also return a 'dividends' array of { t, y, amount } from Polygon data.
     Query param: timeframe=1D|1W|1M|6M|1Y|10Y
     """
     timeframe = request.args.get("timeframe", "1M").upper()
+    dividend_mode = request.args.get("dividend", "false").lower() == "true"
 
-    # Build the URL for Financial Modeling Prep
+    # 1) Fetch from FMP for O/H/L/C
     fmp_url = f"https://financialmodelingprep.com/api/v3/historical-price-full/{ticker}?serietype=line&apikey={FMP_API_KEY}"
     resp = requests.get(fmp_url)
     data = resp.json()
@@ -199,7 +192,7 @@ def get_stock_history(ticker):
     if "historical" not in data or not data["historical"]:
         return jsonify({"error": "No historical data found or invalid ticker"}), 404
 
-    # Sort historical data by date ascending
+    # Sort ascending
     historical = sorted(data["historical"], key=lambda x: x["date"])
     now = datetime.now()
     cutoff_days = {
@@ -212,6 +205,7 @@ def get_stock_history(ticker):
     }
     days = cutoff_days.get(timeframe, 30)
     cutoff = now - timedelta(days=days)
+
     filtered = [
         entry for entry in historical
         if datetime.strptime(entry["date"], "%Y-%m-%d") >= cutoff
@@ -219,29 +213,76 @@ def get_stock_history(ticker):
     if not filtered:
         return jsonify({"error": "No candle data found for the selected timeframe"}), 404
 
-    # Build an array of candlestick data
+    # Build candlestick array
     candles = []
+    candle_map = {}  # date -> close price for quick lookup
     for entry in filtered:
-        dt = datetime.strptime(entry["date"], "%Y-%m-%d")
+        dt_str = entry["date"]  # e.g. "2025-03-10"
+        dt_obj = datetime.strptime(dt_str, "%Y-%m-%d")
+        t_unix = int(dt_obj.timestamp())
+
+        o = float(entry["open"])
+        h = float(entry["high"])
+        l = float(entry["low"])
+        c = float(entry["close"])
+
         candles.append({
-            "t": int(dt.timestamp()),          # or you could use dt.isoformat()
-            "o": float(entry["open"]),
-            "h": float(entry["high"]),
-            "l": float(entry["low"]),
-            "c": float(entry["close"]),
+            "t": t_unix,
+            "o": o,
+            "h": h,
+            "l": l,
+            "c": c,
         })
+        candle_map[dt_str] = c  # store close for that date
+
+    # 2) Optionally fetch dividends from Polygon for dividend dots
+    dividends = []
+    if dividend_mode and POLYGON_API_KEY:
+        polygon_dividend_url = f"https://api.polygon.io/v3/reference/dividends?ticker={ticker}&apiKey={POLYGON_API_KEY}"
+        div_resp = requests.get(polygon_dividend_url)
+        div_data = div_resp.json()
+
+        if "results" in div_data and isinstance(div_data["results"], list):
+            for div_item in div_data["results"]:
+                pay_date = div_item.get("pay_date")
+                ex_date = div_item.get("ex_dividend_date")
+                amount = div_item.get("cash_amount", 0)
+
+                # Prefer pay_date if it exists, else use ex_date
+                use_date = pay_date or ex_date
+                if not use_date:
+                    continue
+
+                # parse date
+                try:
+                    dt_obj = datetime.strptime(use_date, "%Y-%m-%d")
+                except:
+                    continue
+
+                if dt_obj < cutoff:
+                    # outside timeframe
+                    continue
+
+                dt_str2 = dt_obj.strftime("%Y-%m-%d")
+                if dt_str2 in candle_map:
+                    # place the dot at that day's close
+                    c_price = candle_map[dt_str2]
+                    t_unix = int(dt_obj.timestamp())
+                    dividends.append({
+                        "t": t_unix,
+                        "y": c_price,
+                        "amount": amount,
+                    })
 
     return jsonify({
         "timeframe": timeframe,
         "resolution": "D",
         "candles": candles,
+        "dividends": dividends,
     })
 
-
-
-
 # -----------------------------------------------------------------------------
-# NEW ENDPOINT: Search Companies from Local Database
+# 3) Search Companies from Local Database
 # -----------------------------------------------------------------------------
 @app.route("/api/companies", methods=["GET", "OPTIONS"])
 def search_companies():
@@ -254,21 +295,18 @@ def search_companies():
 
     filtered = []
     for company in companies_data:
-        # Safely convert None to "" so we can call .lower()
         company_name = company.get("Company Name") or ""
         company_symbol = company.get("Symbol") or ""
-        # Match either company name or symbol
         if query in company_name.lower() or query in company_symbol.lower():
             filtered.append(company)
 
-    # Map results to the shape your frontend expects
     result = []
     for company in filtered[:10]:
         result.append({
             "symbol": company.get("Symbol", "") or "",
             "name": company.get("Company Name", "") or "",
             "exchange": company.get("Market Category", "") or "",
-            "sector": ""  # or something else if you have it
+            "sector": "",
         })
     return jsonify(result)
 
