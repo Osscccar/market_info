@@ -8,9 +8,9 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import LoadingSpinner from "@/components/LoadingSpinner";
 
-// -----------------------------------
-// IMPORTANT: New Chart.js + Plugins
-// -----------------------------------
+// -----------------------------------------
+// New imports for Chart.js and plugins
+// -----------------------------------------
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -19,19 +19,17 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
-import "chartjs-adapter-date-fns"; // for time scale
+import "chartjs-adapter-date-fns"; // Adapter for time scale
 import {
   CandlestickController,
   CandlestickElement,
 } from "chartjs-chart-financial";
 import crosshairPlugin from "chartjs-plugin-crosshair";
-
-// We'll use the 'Chart' component from 'react-chartjs-2' (v5+)
 import { Chart } from "react-chartjs-2";
 
 import { SearchAutocomplete } from "@/components/SearchAutocomplete";
 
-// Register everything with Chart.js
+// Register Chart.js components and plugins
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -43,20 +41,19 @@ ChartJS.register(
   crosshairPlugin
 );
 
-// Types for candle & dividend data from backend
+// Types for candlestick and dividend data
 interface CandleData {
-  t: number; // Unix timestamp (seconds)
+  t: number; // Unix timestamp in seconds
   o: number;
   h: number;
   l: number;
   c: number;
 }
 interface DividendData {
-  t: number; // Unix timestamp (seconds)
+  t: number; // Unix timestamp in seconds
   y: number; // Price at that date
   amount: number;
 }
-
 interface StockData {
   // Basic
   ticker: string;
@@ -81,7 +78,7 @@ interface StockData {
   lastUpdatedUtc?: string;
   compositeFigi?: string;
   phoneNumber?: string;
-  // Dividend
+  // Dividend (from stockData endpoint)
   dividendCashAmount?: number;
   dividendDeclarationDate?: string;
   dividendType?: string;
@@ -105,15 +102,14 @@ export default function Home() {
   // Chart data states
   const [timeframe, setTimeframe] = useState("1M");
   const [chartLoading, setChartLoading] = useState(false);
-
   const [candles, setCandles] = useState<CandleData[]>([]);
   const [dividends, setDividends] = useState<DividendData[]>([]);
 
   const timeframeOptions = ["1D", "1W", "1M", "6M", "1Y", "10Y"];
 
-  // -------------------------------------------------
+  // ------------------------------------------------
   // 1) Fetch main stock data
-  // -------------------------------------------------
+  // ------------------------------------------------
   async function handleFetch() {
     setError("");
     setStockData(null);
@@ -138,8 +134,6 @@ export default function Home() {
       }
       const data = await res.json();
       setStockData(data);
-
-      // After fetching main data, load the chart data for default timeframe
       await fetchCandlestickData("1M");
     } catch (err: any) {
       setError(err.message);
@@ -148,9 +142,9 @@ export default function Home() {
     }
   }
 
-  // -------------------------------------------------
+  // ------------------------------------------------
   // 2) Fetch Candlestick + Dividend Data
-  // -------------------------------------------------
+  // ------------------------------------------------
   async function fetchCandlestickData(tf: string) {
     if (!ticker) return;
     setChartLoading(true);
@@ -162,7 +156,6 @@ export default function Home() {
       if (dividendMode) {
         urlParams.append("dividend", "true");
       }
-
       const url = `https://market-info-m22z.onrender.com/api/stock/${ticker}/history?${urlParams.toString()}`;
       const res = await fetch(url);
       if (!res.ok) {
@@ -173,13 +166,11 @@ export default function Home() {
         return;
       }
       const data = await res.json();
-
       if (data.candles) {
         setCandles(data.candles);
       } else {
         setCandles([]);
       }
-
       if (data.dividends) {
         setDividends(data.dividends);
       } else {
@@ -205,24 +196,21 @@ export default function Home() {
   // Toggle handlers
   function handleAdvancedToggle(val: boolean) {
     setAdvancedMode(val);
-    // Optionally re-fetch if you want advanced data to refresh
   }
 
   function handleDividendToggle(val: boolean) {
     setDividendMode(val);
-    // Optionally re-fetch the chart data with dividends
   }
 
-  // -------------------------------------------------
-  // Build Chart.js data
-  // -------------------------------------------------
+  // ------------------------------------------------
+  // Build Chart.js data for Candlestick & Dividend points
+  // ------------------------------------------------
   const chartData = {
     datasets: [
-      // Candlestick dataset
       {
         label: "Candlestick",
         data: candles.map((c) => ({
-          x: c.t * 1000, // convert seconds -> ms
+          x: c.t * 1000, // convert seconds to ms
           o: c.o,
           h: c.h,
           l: c.l,
@@ -235,7 +223,6 @@ export default function Home() {
           unchanged: "#999999",
         },
       },
-      // Dividend scatter points
       {
         label: "Dividends",
         data: dividends.map((d) => ({
@@ -243,7 +230,7 @@ export default function Home() {
           y: d.y,
         })),
         type: "scatter" as const,
-        pointBackgroundColor: "#eab308", // gold color
+        pointBackgroundColor: "#eab308", // gold
         pointRadius: 5,
       },
     ],
@@ -254,48 +241,31 @@ export default function Home() {
     maintainAspectRatio: false,
     scales: {
       x: {
-        type: "time", // uses chartjs-adapter-date-fns
-        time: {
-          unit: "day",
-        },
+        type: "time", // time scale using chartjs-adapter-date-fns
+        time: { unit: "day" },
         display: true,
       },
-      y: {
-        display: true,
-        beginAtZero: false,
-      },
+      y: { display: true, beginAtZero: false },
     },
-    interaction: {
-      mode: "nearest",
-      intersect: false,
-    },
+    interaction: { mode: "nearest", intersect: false },
     plugins: {
       legend: { display: false },
       crosshair: {
-        line: {
-          color: "#999999",
-          width: 1,
-        },
-        sync: {
-          enabled: false,
-        },
-        zoom: {
-          enabled: false,
-        },
-        snap: {
-          enabled: true,
-        },
+        line: { color: "#999999", width: 1 },
+        sync: { enabled: false },
+        zoom: { enabled: false },
+        snap: { enabled: true },
       },
     },
   };
 
-  // -------------------------------------------------
+  // ------------------------------------------------
   // Render
-  // -------------------------------------------------
+  // ------------------------------------------------
   return (
     <div className="min-h-screen bg-background text-foreground">
       <main className="container mx-auto px-4 py-8">
-        {/* Input & Toggles at the Top */}
+        {/* Input & Toggles */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-6">Stock Information</h1>
           <div className="flex flex-col md:flex-row gap-4 items-start md:items-end mb-6">
@@ -342,7 +312,6 @@ export default function Home() {
         {error && <p className="text-red-500 mt-4">{error}</p>}
         {loading && <LoadingSpinner />}
 
-        {/* Stock Data Section (Below Input) */}
         {stockData && (
           <>
             {/* Price Section */}
@@ -380,7 +349,6 @@ export default function Home() {
 
             {/* Cards Section */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Basic Info Card */}
               <Card className="bg-gray-900/50 border-gray-800/50">
                 <CardHeader className="border-b border-gray-800/50 pb-3">
                   <CardTitle className="flex items-center text-xl">
@@ -448,7 +416,6 @@ export default function Home() {
                 </CardContent>
               </Card>
 
-              {/* Advanced Info Card */}
               {advancedMode && (
                 <Card className="bg-gray-900/50 border-gray-800/50">
                   <CardHeader className="border-b border-gray-800/50 pb-3">
@@ -458,12 +425,11 @@ export default function Home() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-4 text-sm">
-                    {/* ... Add your advanced fields from stockData ... */}
+                    {/* Add your advanced fields here */}
                   </CardContent>
                 </Card>
               )}
 
-              {/* Dividend Info Card */}
               {dividendMode && (
                 <Card className="bg-gray-900/50 border-gray-800/50">
                   <CardHeader className="border-b border-gray-800/50 pb-3">
@@ -473,13 +439,13 @@ export default function Home() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-4 text-sm">
-                    {/* ... Add your dividend fields from stockData ... */}
+                    {/* Add your dividend fields here */}
                   </CardContent>
                 </Card>
               )}
             </div>
 
-            {/* Price History Card (Candlestick + Dividends) */}
+            {/* Price History Card (Candlestick Chart with Dividends and Crosshair) */}
             <div className="bg-gray-900/50 border border-gray-800/50 rounded-lg p-4 mt-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xl font-semibold">

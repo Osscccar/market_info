@@ -1,6 +1,5 @@
 import os
 import json
-import time
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import requests
@@ -42,9 +41,9 @@ except Exception as e:
 def hello():
     return "Backend Debugging Successful"
 
-# -----------------------------------------------------------------------------
-# 1) Fetch Stock Data (Polygon + Finnhub)
-# -----------------------------------------------------------------------------
+# ---------------------------
+# 1) Stock Data Endpoint
+# ---------------------------
 @app.route("/api/stock/<string:ticker>", methods=["GET", "OPTIONS"])
 def get_stock_data(ticker):
     if request.method == "OPTIONS":
@@ -53,13 +52,13 @@ def get_stock_data(ticker):
     advanced_mode = request.args.get("advanced", "false").lower() == "true"
     dividend_mode = request.args.get("dividend", "false").lower() == "true"
 
-    # 1) Basic + Advanced from Polygon
+    # Fetch from Polygon for basic/advanced data
     polygon_url = f"https://api.polygon.io/v3/reference/tickers/{ticker}?apiKey={POLYGON_API_KEY}"
-    polygon_resp = requests.get(polygon_url)
     try:
+        polygon_resp = requests.get(polygon_url)
         polygon_data = polygon_resp.json()
-    except:
-        return jsonify({"error": "Unable to parse JSON from Polygon (tickers)."}), 500
+    except Exception as e:
+        return jsonify({"error": "Error fetching data from Polygon"}), 500
 
     if "results" not in polygon_data:
         return jsonify({"error": "Ticker not found or invalid Polygon response"}), 404
@@ -77,32 +76,18 @@ def get_stock_data(ticker):
     phone_number_basic = results.get("phone_number")
 
     # Advanced fields
-    cik = None
-    address = None
-    post_code = None
-    state = None
-    city = None
-    phone_number_advanced = None
-    primary_exchange = None
-    composite_figi = None
-    share_class_figi = None
-    last_updated_utc = None
-    round_lot = None
-    type_ = None
-
-    if advanced_mode:
-        cik           = results.get("cik")
-        address       = results.get("address", {}).get("address1")
-        post_code     = results.get("address", {}).get("postal_code")
-        city          = results.get("address", {}).get("city")
-        state         = results.get("address", {}).get("state")
-        phone_number_advanced = results.get("phone_number")
-        primary_exchange = results.get("primary_exchange")
-        share_class_figi = results.get("share_class_figi")
-        composite_figi = results.get("composite_figi")
-        last_updated_utc = results.get("last_updated_utc")
-        type_ = results.get("type")
-        round_lot = results.get("round_lot")
+    cik = results.get("cik") if advanced_mode else None
+    address = results.get("address", {}).get("address1") if advanced_mode else None
+    post_code = results.get("address", {}).get("postal_code") if advanced_mode else None
+    city = results.get("address", {}).get("city") if advanced_mode else None
+    state = results.get("address", {}).get("state") if advanced_mode else None
+    phone_number_advanced = results.get("phone_number") if advanced_mode else None
+    primary_exchange = results.get("primary_exchange") if advanced_mode else None
+    composite_figi = results.get("composite_figi") if advanced_mode else None
+    share_class_figi = results.get("share_class_figi") if advanced_mode else None
+    last_updated_utc = results.get("last_updated_utc") if advanced_mode else None
+    type_ = results.get("type") if advanced_mode else None
+    round_lot = results.get("round_lot") if advanced_mode else None
 
     # Dividend fields (from Polygon dividends)
     dividend_cash_amount = None
@@ -114,26 +99,29 @@ def get_stock_data(ticker):
 
     if dividend_mode:
         polygon_dividend_url = f"https://api.polygon.io/v3/reference/dividends?ticker={ticker}&apiKey={POLYGON_API_KEY}"
-        dividend_resp = requests.get(polygon_dividend_url)
         try:
+            dividend_resp = requests.get(polygon_dividend_url)
             dividend_data = dividend_resp.json()
-        except:
-            return jsonify({"error": "Unable to parse JSON from Polygon (dividends)."}), 500
+        except Exception as e:
+            return jsonify({"error": "Error fetching dividend data from Polygon"}), 500
 
-        if "results" in dividend_data and isinstance(dividend_data["results"], list):
-            if len(dividend_data["results"]) > 0:
-                first_dividend = dividend_data["results"][0]
-                dividend_cash_amount = first_dividend.get("cash_amount")
-                dividend_declaration_date = first_dividend.get("declaration_date")
-                dividend_type = first_dividend.get("dividend_type")
-                ex_dividend_date = first_dividend.get("ex_dividend_date")
-                frequency = first_dividend.get("frequency")
-                pay_date = first_dividend.get("pay_date")
+        if "results" in dividend_data and isinstance(dividend_data["results"], list) and len(dividend_data["results"]) > 0:
+            first_dividend = dividend_data["results"][0]
+            dividend_cash_amount = first_dividend.get("cash_amount")
+            dividend_declaration_date = first_dividend.get("declaration_date")
+            dividend_type = first_dividend.get("dividend_type")
+            ex_dividend_date = first_dividend.get("ex_dividend_date")
+            frequency = first_dividend.get("frequency")
+            pay_date = first_dividend.get("pay_date")
 
-    # 2) Real-time price from Finnhub
+    # Real-time price from Finnhub
     finnhub_url = f"https://finnhub.io/api/v1/quote?symbol={ticker}&token={FINNHUB_API_KEY}"
-    finnhub_resp = requests.get(finnhub_url)
-    price_data = finnhub_resp.json()
+    try:
+        finnhub_resp = requests.get(finnhub_url)
+        price_data = finnhub_resp.json()
+    except Exception as e:
+        return jsonify({"error": "Error fetching price data from Finnhub"}), 500
+
     current_price = price_data.get("c")
     price_change = price_data.get("d")
     percent_change = price_data.get("dp")
@@ -171,23 +159,26 @@ def get_stock_data(ticker):
         "percentChange": percent_change,
     })
 
-# -----------------------------------------------------------------------------
-# 2) Historical Candlestick Data + Dividends for Chart
-# -----------------------------------------------------------------------------
+# ---------------------------
+# 2) Historical Candlestick Data + Dividends Endpoint
+# ---------------------------
 @app.route("/api/stock/<string:ticker>/history", methods=["GET"])
 def get_stock_history(ticker):
     """
     Return historical candlestick data using Financial Modeling Prep (FMP).
-    If ?dividend=true, also return a 'dividends' array of { t, y, amount } from Polygon data.
+    If ?dividend=true, also return a 'dividends' array.
     Query param: timeframe=1D|1W|1M|6M|1Y|10Y
     """
     timeframe = request.args.get("timeframe", "1M").upper()
     dividend_mode = request.args.get("dividend", "false").lower() == "true"
 
-    # 1) Fetch from FMP for O/H/L/C
+    # Fetch from FMP
     fmp_url = f"https://financialmodelingprep.com/api/v3/historical-price-full/{ticker}?serietype=line&apikey={FMP_API_KEY}"
-    resp = requests.get(fmp_url)
-    data = resp.json()
+    try:
+        resp = requests.get(fmp_url)
+        data = resp.json()
+    except Exception as e:
+        return jsonify({"error": "Error fetching historical data from FMP"}), 500
 
     if "historical" not in data or not data["historical"]:
         return jsonify({"error": "No historical data found or invalid ticker"}), 404
@@ -195,85 +186,63 @@ def get_stock_history(ticker):
     # Sort ascending
     historical = sorted(data["historical"], key=lambda x: x["date"])
     now = datetime.now()
-    cutoff_days = {
-        "1D": 1,
-        "1W": 7,
-        "1M": 30,
-        "6M": 180,
-        "1Y": 365,
-        "10Y": 3650,
-    }
+    cutoff_days = {"1D": 1, "1W": 7, "1M": 30, "6M": 180, "1Y": 365, "10Y": 3650}
     days = cutoff_days.get(timeframe, 30)
     cutoff = now - timedelta(days=days)
-
-    filtered = [
-        entry for entry in historical
-        if datetime.strptime(entry["date"], "%Y-%m-%d") >= cutoff
-    ]
+    filtered = [entry for entry in historical if datetime.strptime(entry["date"], "%Y-%m-%d") >= cutoff]
     if not filtered:
         return jsonify({"error": "No candle data found for the selected timeframe"}), 404
 
-    # Build candlestick array
     candles = []
-    candle_map = {}  # date -> close price for quick lookup
+    candle_map = {}  # for dividend lookup: date string -> close price
     for entry in filtered:
-        dt_str = entry["date"]  # e.g. "2025-03-10"
-        dt_obj = datetime.strptime(dt_str, "%Y-%m-%d")
+        # Skip if required keys are missing
+        if not all(k in entry for k in ["open", "high", "low", "close"]):
+            continue
+        dt_str = entry["date"]
+        try:
+            dt_obj = datetime.strptime(dt_str, "%Y-%m-%d")
+        except Exception:
+            continue
         t_unix = int(dt_obj.timestamp())
+        try:
+            o = float(entry["open"])
+            h = float(entry["high"])
+            l = float(entry["low"])
+            c = float(entry["close"])
+        except Exception:
+            continue
+        candles.append({"t": t_unix, "o": o, "h": h, "l": l, "c": c})
+        candle_map[dt_str] = c
 
-        o = float(entry["open"])
-        h = float(entry["high"])
-        l = float(entry["low"])
-        c = float(entry["close"])
-
-        candles.append({
-            "t": t_unix,
-            "o": o,
-            "h": h,
-            "l": l,
-            "c": c,
-        })
-        candle_map[dt_str] = c  # store close for that date
-
-    # 2) Optionally fetch dividends from Polygon for dividend dots
+    # Fetch dividends if requested
     dividends = []
     if dividend_mode and POLYGON_API_KEY:
         polygon_dividend_url = f"https://api.polygon.io/v3/reference/dividends?ticker={ticker}&apiKey={POLYGON_API_KEY}"
-        div_resp = requests.get(polygon_dividend_url)
-        div_data = div_resp.json()
-
+        try:
+            div_resp = requests.get(polygon_dividend_url)
+            div_data = div_resp.json()
+        except Exception:
+            div_data = {}
         if "results" in div_data and isinstance(div_data["results"], list):
             for div_item in div_data["results"]:
                 pay_date = div_item.get("pay_date")
                 ex_date = div_item.get("ex_dividend_date")
                 amount = div_item.get("cash_amount", 0)
-
-                # Prefer pay_date if it exists, else use ex_date
                 use_date = pay_date or ex_date
                 if not use_date:
                     continue
-
-                # parse date
                 try:
                     dt_obj = datetime.strptime(use_date, "%Y-%m-%d")
                 except:
                     continue
-
                 if dt_obj < cutoff:
-                    # outside timeframe
                     continue
-
                 dt_str2 = dt_obj.strftime("%Y-%m-%d")
                 if dt_str2 in candle_map:
-                    # place the dot at that day's close
                     c_price = candle_map[dt_str2]
                     t_unix = int(dt_obj.timestamp())
-                    dividends.append({
-                        "t": t_unix,
-                        "y": c_price,
-                        "amount": amount,
-                    })
-
+                    dividends.append({"t": t_unix, "y": c_price, "amount": amount})
     return jsonify({
         "timeframe": timeframe,
         "resolution": "D",
@@ -281,13 +250,13 @@ def get_stock_history(ticker):
         "dividends": dividends,
     })
 
-# -----------------------------------------------------------------------------
-# 3) Search Companies from Local Database
-# -----------------------------------------------------------------------------
+# ---------------------------
+# 3) Search Companies Endpoint
+# ---------------------------
 @app.route("/api/companies", methods=["GET", "OPTIONS"])
 def search_companies():
     if request.method == "OPTIONS":
-        return jsonify({}), 200  # Handle CORS preflight
+        return jsonify({}), 200  # CORS preflight
 
     query = request.args.get("query", "").strip().lower()
     if not query:
@@ -299,7 +268,6 @@ def search_companies():
         company_symbol = company.get("Symbol") or ""
         if query in company_name.lower() or query in company_symbol.lower():
             filtered.append(company)
-
     result = []
     for company in filtered[:10]:
         result.append({
