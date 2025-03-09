@@ -18,6 +18,8 @@ import {
   TimeScale,
   Tooltip,
   Legend,
+  LineController, // <--- required for "scatter"
+  LineElement, // <--- also needed
   PointElement,
 } from "chart.js";
 import "chartjs-adapter-date-fns"; // Adapter for time scale
@@ -477,8 +479,8 @@ export default function Home() {
               {!chartLoading && candles.length > 0 && (
                 <div className="h-80">
                   <Chart
-                    type="candlestick"
-                    data={chartDataAny}
+                    type="candlestick" // <--- the Chart type
+                    data={chartDataAny} // <--- your chart data
                     options={chartOptions}
                   />
                 </div>
